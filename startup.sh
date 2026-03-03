@@ -82,25 +82,22 @@ echo ">> Starting noVNC on port ${NOVNC_PORT}"
     --web /opt/noVNC &
 
 # ============================================
-# 注入 noVNC 默认参数（自动高质量压缩 + 性能模式）
-# ============================================
-cat > /opt/noVNC/app/custom.js << 'JSEOF'
-// 自动应用性能优化参数
-document.addEventListener('DOMContentLoaded', function() {
-    // 这些参数通过 URL query 更可靠，此处作为 fallback
-});
-JSEOF
-
-# ============================================
-# 启动 OpenClaw Gateway（后台运行）
+# 启动 OpenClaw Gateway（后台运行，带重试健康检查）
 # ============================================
 echo ">> Starting OpenClaw Gateway on port 18789..."
 nohup openclaw gateway --port 18789 > /tmp/gateway.log 2>&1 &
-sleep 2
-if curl -s -o /dev/null -w '' http://127.0.0.1:18789/ 2>/dev/null; then
-    echo ">> OpenClaw Gateway started successfully"
-else
-    echo ">> Warning: Gateway may still be starting, check /tmp/gateway.log"
+
+GATEWAY_READY=0
+for i in $(seq 1 15); do
+    if curl -s -o /dev/null -w '' http://127.0.0.1:18789/ 2>/dev/null; then
+        GATEWAY_READY=1
+        echo ">> OpenClaw Gateway started successfully (${i}s)"
+        break
+    fi
+    sleep 1
+done
+if [ "$GATEWAY_READY" -eq 0 ]; then
+    echo ">> Warning: Gateway not responding after 15s, check /tmp/gateway.log"
 fi
 
 # ============================================

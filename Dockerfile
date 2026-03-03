@@ -13,58 +13,27 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LC_ALL=en_US.UTF-8
 
 # ============================================
-# 1. 基础依赖 + 中文支持
+# 1. 基础依赖 + 中文支持 + Xfce4 桌面 + 主题美化
 # ============================================
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    locales \
-    tzdata \
-    ca-certificates \
-    curl \
-    wget \
-    git \
-    sudo \
-    dbus-x11 \
-    x11-utils \
-    x11-xserver-utils \
-    xauth \
+    locales tzdata ca-certificates curl wget git sudo \
+    dbus-x11 x11-utils x11-xserver-utils xauth \
+    # Xfce4 桌面
+    xfce4 xfce4-terminal xfce4-whiskermenu-plugin \
+    thunar thunar-archive-plugin mousepad ristretto file-roller \
+    # 主题 + 字体
+    arc-theme papirus-icon-theme \
+    fonts-noto fonts-noto-cjk fonts-noto-color-emoji \
+    dmz-cursor-theme gtk2-engines-murrine gtk2-engines-pixbuf \
     && locale-gen en_US.UTF-8 \
     && update-locale LANG=en_US.UTF-8 \
     && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # ============================================
-# 2. Xfce4 桌面环境（轻量）
+# 2. Firefox 浏览器（Mozilla 官方 APT 仓库，绕过 snap）
 # ============================================
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    xfce4 \
-    xfce4-terminal \
-    xfce4-whiskermenu-plugin \
-    thunar \
-    thunar-archive-plugin \
-    mousepad \
-    ristretto \
-    file-roller \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# ============================================
-# 3. 现代主题美化（Arc + Papirus 图标）
-# ============================================
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    arc-theme \
-    papirus-icon-theme \
-    fonts-noto \
-    fonts-noto-cjk \
-    fonts-noto-color-emoji \
-    dmz-cursor-theme \
-    gtk2-engines-murrine \
-    gtk2-engines-pixbuf \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# ============================================
-# 4. Firefox 浏览器（Mozilla 官方 APT 仓库，绕过 snap）
-# ============================================
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        gnupg \
+RUN apt-get update && apt-get install -y --no-install-recommends gnupg \
     && install -d -m 0755 /etc/apt/keyrings \
     && curl -fsSL https://packages.mozilla.org/apt/repo-signing-key.gpg \
        -o /etc/apt/keyrings/packages.mozilla.org.asc \
@@ -76,76 +45,50 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # ============================================
-# 5. TigerVNC + noVNC
+# 3. TigerVNC + noVNC + 截图/自动化工具
 # ============================================
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    tigervnc-standalone-server \
-    tigervnc-common \
-    tigervnc-tools \
-    python3 \
-    python3-numpy \
+    tigervnc-standalone-server tigervnc-common tigervnc-tools \
+    python3 python3-numpy python3-pip python3-pil \
+    scrot imagemagick xdotool xclip xsel \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN git clone --depth 1 https://github.com/novnc/noVNC.git /opt/noVNC \
     && git clone --depth 1 https://github.com/novnc/websockify.git /opt/noVNC/utils/websockify \
-    && ln -s /opt/noVNC/vnc.html /opt/noVNC/index.html
+    && ln -s /opt/noVNC/vnc.html /opt/noVNC/index.html \
+    && rm -rf /opt/noVNC/.git /opt/noVNC/utils/websockify/.git
 
 # ============================================
-# 6. 截图 + 自动化工具（OpenClaw 核心依赖）
-# ============================================
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    scrot \
-    imagemagick \
-    xdotool \
-    xclip \
-    xsel \
-    python3-pip \
-    python3-pil \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# ============================================
-# 7. Node.js 22 + OpenClaw
+# 4. Node.js 22 + OpenClaw（编译工具装完即删，省 ~500MB）
 # ============================================
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y nodejs \
     && apt-get install -y --no-install-recommends \
-       build-essential \
-       python3-dev \
-       make \
-       g++ \
-       cmake \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# npm 全局路径 + 安装 OpenClaw
-ENV NPM_CONFIG_PREFIX=/usr/local
-RUN npm install -g openclaw@latest \
+       build-essential python3-dev make g++ cmake \
+    && npm install -g openclaw@latest \
     && npm cache clean --force \
     && rm -rf /root/.npm /tmp/* \
+    && apt-get purge -y --auto-remove build-essential python3-dev make g++ cmake \
+    && apt-get clean && rm -rf /var/lib/apt/lists/* \
     && openclaw --version || true
 
 # ============================================
-# 8. 实用工具
+# 5. 实用工具
 # ============================================
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    htop \
-    nano \
-    vim \
-    net-tools \
-    iputils-ping \
-    procps \
-    xdg-utils \
+    htop nano vim net-tools iputils-ping procps xdg-utils \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # ============================================
-# 9. 截图脚本
+# 6. 截图脚本
 # ============================================
 RUN mkdir -p /opt/openclaw /screenshots
 COPY screenshot.sh /opt/openclaw/screenshot.sh
 RUN chmod +x /opt/openclaw/screenshot.sh
 
 # ============================================
-# 10. 主题配置（存到 /opt 下，启动时拷贝到 /root）
-#     因为 /root 会被 volume 挂载覆盖
+# 7. 主题配置（存到 /opt 下，启动时拷贝到 /root）
+#    因为 /root 会被 volume 挂载覆盖
 # ============================================
 RUN mkdir -p /opt/openclaw/dotfiles/.config/xfce4/xfconf/xfce-perchannel-xml \
     && mkdir -p /opt/openclaw/dotfiles/.config/gtk-3.0
@@ -242,13 +185,13 @@ RUN printf '<?xml version="1.0" encoding="UTF-8"?>\n\
 </channel>\n' > /opt/openclaw/dotfiles/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-panel.xml
 
 # ============================================
-# 10b. Firefox 低资源配置（容器无 GPU，防崩溃）
+# 8. Firefox 配置（ioa-max 放宽资源限制）
 # ============================================
 RUN mkdir -p /opt/openclaw/dotfiles/.mozilla/firefox/openclaw.default \
     && printf '[General]\nStartWithLastProfile=1\n\n[Profile0]\nName=default\nIsRelative=1\nPath=openclaw.default\nDefault=1\n' \
        > /opt/openclaw/dotfiles/.mozilla/firefox/profiles.ini \
-    && printf 'user_pref("dom.ipc.processCount", 2);\n\
-user_pref("dom.ipc.processCount.webIsolated", 1);\n\
+    && printf 'user_pref("dom.ipc.processCount", 4);\n\
+user_pref("dom.ipc.processCount.webIsolated", 2);\n\
 user_pref("layers.acceleration.disabled", true);\n\
 user_pref("gfx.webrender.all", false);\n\
 user_pref("gfx.webrender.enabled", false);\n\
@@ -256,8 +199,8 @@ user_pref("gfx.canvas.accelerated", false);\n\
 user_pref("media.hardware-video-decoding.enabled", false);\n\
 user_pref("webgl.disabled", true);\n\
 user_pref("webgl.enable-webgl2", false);\n\
-user_pref("browser.cache.memory.capacity", 65536);\n\
-user_pref("browser.cache.disk.capacity", 204800);\n\
+user_pref("browser.cache.memory.capacity", 131072);\n\
+user_pref("browser.cache.disk.capacity", 512000);\n\
 user_pref("browser.sessionhistory.max_total_viewers", 2);\n\
 user_pref("browser.tabs.unloadOnLowMemory", true);\n\
 user_pref("extensions.pocket.enabled", false);\n\
@@ -272,7 +215,7 @@ user_pref("ui.prefersReducedMotion", 1);\n' \
        > /opt/openclaw/dotfiles/.mozilla/firefox/openclaw.default/user.js
 
 # ============================================
-# 11. 启动脚本
+# 9. 启动脚本
 # ============================================
 COPY startup.sh /opt/startup.sh
 RUN chmod +x /opt/startup.sh

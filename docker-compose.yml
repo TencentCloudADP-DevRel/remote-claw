@@ -17,11 +17,11 @@ services:
       - SYS_ADMIN               # Firefox content sandbox 需要 clone(CLONE_NEWUSER)
     volumes:
       - desktop-home:/root
-      - /root/remote-openclaw/shared:/shared        # 宿主机共享目录
-      - screenshots:/screenshots                     # 截图输出目录
-    shm_size: "2g"
-    mem_limit: 8g
-    cpus: 6
+      - /root/remote-claw/shared:/shared             # 宿主机共享目录
+      - screenshots:/screenshots                      # 截图输出目录
+    shm_size: "4g"
+    mem_limit: 16g
+    cpus: 12
 
 volumes:
   desktop-home:
