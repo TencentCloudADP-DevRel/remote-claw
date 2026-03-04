@@ -24,6 +24,12 @@ cd /root/remote-claw
 sudo ./autotune-deploy.sh
 ```
 
+兼容入口（等价）：
+
+```bash
+sudo ./setup.sh
+```
+
 脚本会自动完成：
 
 - 检测系统资源并写入 `.env`
