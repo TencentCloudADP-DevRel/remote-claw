@@ -1,27 +1,33 @@
 services:
   desktop:
     build: .
-    container_name: openclaw-desktop
+    container_name: ${OPENCLAW_CONTAINER_NAME:-openclaw-desktop}
     hostname: openclaw
+    init: true
     restart: unless-stopped
     ports:
-      - "5901:5901"   # VNC — macOS: vnc://IP:5901
-      - "6080:6080"   # noVNC — 浏览器: http://IP:6080
+      - "${OPENCLAW_VNC_PORT:-5901}:5901"         # VNC — macOS: vnc://IP:5901
+      - "${OPENCLAW_NOVNC_PORT:-6080}:6080"       # noVNC — 浏览器: http://IP:6080
+      - "${OPENCLAW_GATEWAY_PORT:-18789}:${OPENCLAW_GATEWAY_PORT:-18789}"   # OpenClaw Gateway — Portal 连接: ws://IP:PORT
     environment:
-      - VNC_PW=openclaw
-      - VNC_RESOLUTION=1920x1080
-      - VNC_COL_DEPTH=24
+      - VNC_PW=${OPENCLAW_VNC_PASSWORD:-openclaw}
+      - VNC_RESOLUTION=${OPENCLAW_VNC_RESOLUTION:-1920x1080}
+      - VNC_COL_DEPTH=${OPENCLAW_VNC_DEPTH:-24}
+      - GATEWAY_PORT=${OPENCLAW_GATEWAY_PORT:-18789}
+      - FIREFOX_PROCESS_COUNT=${OPENCLAW_FIREFOX_PROCESS_COUNT:-4}
+      - FIREFOX_WEB_ISOLATED_COUNT=${OPENCLAW_FIREFOX_WEB_ISOLATED_COUNT:-2}
+      - FIREFOX_CACHE_MEMORY_KB=${OPENCLAW_FIREFOX_CACHE_MEMORY_KB:-131072}
     security_opt:
       - seccomp=unconfined      # 允许 Firefox 沙箱创建用户命名空间
     cap_add:
       - SYS_ADMIN               # Firefox content sandbox 需要 clone(CLONE_NEWUSER)
     volumes:
       - desktop-home:/root
-      - ./shared:/shared                             # 宿主机共享目录
-      - screenshots:/screenshots                     # 截图输出目录
-    shm_size: "2g"
-    mem_limit: 8g
-    cpus: 6
+      - ./shared:/shared                              # 宿主机共享目录
+      - screenshots:/screenshots                      # 截图输出目录
+    shm_size: "${OPENCLAW_SHM_SIZE:-2g}"
+    mem_limit: "${OPENCLAW_MEM_LIMIT:-8g}"
+    cpus: ${OPENCLAW_CPUS:-4}
 
 volumes:
   desktop-home:

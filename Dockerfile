@@ -50,7 +50,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends gnupg \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tigervnc-standalone-server tigervnc-common tigervnc-tools \
     python3 python3-numpy python3-pip python3-pil \
-    scrot imagemagick xdotool xclip xsel \
+    scrot imagemagick xdotool xclip xsel autocutsel \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN git clone --depth 1 https://github.com/novnc/noVNC.git /opt/noVNC \
@@ -59,18 +59,24 @@ RUN git clone --depth 1 https://github.com/novnc/noVNC.git /opt/noVNC \
     && rm -rf /opt/noVNC/.git /opt/noVNC/utils/websockify/.git
 
 # ============================================
-# 4. Node.js 22 + OpenClaw（编译工具装完即删，省 ~500MB）
+# 4. Node.js 22 + OpenClaw + Claude Code + Codex CLI
+#    编译工具装完即删，省 ~500MB
 # ============================================
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y nodejs \
     && apt-get install -y --no-install-recommends \
        build-essential python3-dev make g++ cmake \
-    && npm install -g openclaw@latest \
+    && npm install -g \
+       openclaw@latest \
+       @anthropic-ai/claude-code@latest \
+       @openai/codex@latest \
     && npm cache clean --force \
     && rm -rf /root/.npm /tmp/* \
     && apt-get purge -y --auto-remove build-essential python3-dev make g++ cmake \
     && apt-get clean && rm -rf /var/lib/apt/lists/* \
-    && openclaw --version || true
+    && openclaw --version || true \
+    && claude --version || true \
+    && codex --version || true
 
 # ============================================
 # 5. 实用工具
@@ -211,7 +217,10 @@ user_pref("toolkit.telemetry.enabled", false);\n\
 user_pref("app.update.enabled", false);\n\
 user_pref("browser.shell.checkDefaultBrowser", false);\n\
 user_pref("toolkit.cosmeticAnimations.enabled", false);\n\
-user_pref("ui.prefersReducedMotion", 1);\n' \
+user_pref("ui.prefersReducedMotion", 1);\n\
+user_pref("network.dns.disableIPv6", true);\n\
+user_pref("security.tls.version.min", 1);\n\
+user_pref("security.tls.version.max", 4);\n' \
        > /opt/openclaw/dotfiles/.mozilla/firefox/openclaw.default/user.js
 
 # ============================================
@@ -220,6 +229,6 @@ user_pref("ui.prefersReducedMotion", 1);\n' \
 COPY startup.sh /opt/startup.sh
 RUN chmod +x /opt/startup.sh
 
-EXPOSE 5901 6080
+EXPOSE 5901 6080 18789
 
 ENTRYPOINT ["/opt/startup.sh"]
