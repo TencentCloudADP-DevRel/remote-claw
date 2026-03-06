@@ -1,5 +1,6 @@
 services:
   desktop:
+    image: tencentcloudadpdevrel/openclaw-desktop:latest
     build: .
     container_name: ${OPENCLAW_CONTAINER_NAME:-openclaw-desktop}
     hostname: openclaw
@@ -10,6 +11,7 @@ services:
       - "${OPENCLAW_NOVNC_PORT:-6080}:6080"       # noVNC — 浏览器: http://IP:6080
       - "${OPENCLAW_GATEWAY_PORT:-18789}:${OPENCLAW_GATEWAY_PORT:-18789}"   # OpenClaw Gateway — Portal 连接: ws://IP:PORT
     environment:
+      # ---- 桌面/VNC ----
       - VNC_PW=${OPENCLAW_VNC_PASSWORD:-openclaw}
       - VNC_RESOLUTION=${OPENCLAW_VNC_RESOLUTION:-1920x1080}
       - VNC_COL_DEPTH=${OPENCLAW_VNC_DEPTH:-24}
@@ -17,6 +19,22 @@ services:
       - FIREFOX_PROCESS_COUNT=${OPENCLAW_FIREFOX_PROCESS_COUNT:-4}
       - FIREFOX_WEB_ISOLATED_COUNT=${OPENCLAW_FIREFOX_WEB_ISOLATED_COUNT:-2}
       - FIREFOX_CACHE_MEMORY_KB=${OPENCLAW_FIREFOX_CACHE_MEMORY_KB:-131072}
+      # ---- Portal 注册（Portal 模式使用） ----
+      - PORTAL_URL=${PORTAL_URL:-}
+      - REGISTER_TOKEN=${REGISTER_TOKEN:-}
+      - PUBLIC_IP=${PUBLIC_IP:-}
+      # ---- AI 模型 API Keys（独立模式使用） ----
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - MINIMAX_API_KEY=${MINIMAX_API_KEY:-}
+      - MOONSHOT_API_KEY=${MOONSHOT_API_KEY:-}
+      - QIANFAN_API_KEY=${QIANFAN_API_KEY:-}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # 允许容器访问宿主机 Ollama
     security_opt:
       - seccomp=unconfined      # 允许 Firefox 沙箱创建用户命名空间
     cap_add:

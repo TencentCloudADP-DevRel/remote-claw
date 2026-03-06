@@ -197,6 +197,49 @@ if [ "$GATEWAY_READY" -eq 0 ]; then
 fi
 
 # ============================================
+# 自动注册到 Portal（如果提供了 REGISTER_TOKEN）
+# ============================================
+if [ -n "${REGISTER_TOKEN:-}" ] && [ -n "${PORTAL_URL:-}" ]; then
+    echo ">> Auto-registering with Portal: ${PORTAL_URL}"
+
+    # 读取 Gateway auth token
+    GW_AUTH_TOKEN=""
+    if [ -f /root/.openclaw/openclaw.json ]; then
+        GW_AUTH_TOKEN=$(python3 -c "
+import json
+with open('/root/.openclaw/openclaw.json') as f:
+    cfg = json.load(f)
+print(cfg.get('gateway', {}).get('auth', {}).get('token', ''))
+" 2>/dev/null || echo "")
+    fi
+
+    # 确定公网 IP
+    GW_PUBLIC_IP="${PUBLIC_IP:-}"
+    if [ -z "$GW_PUBLIC_IP" ]; then
+        GW_PUBLIC_IP=$(curl -fsSL --max-time 5 https://ifconfig.me 2>/dev/null || curl -fsSL --max-time 5 https://api.ipify.org 2>/dev/null || echo "")
+    fi
+
+    if [ -n "$GW_AUTH_TOKEN" ] && [ -n "$GW_PUBLIC_IP" ]; then
+        GW_URL="ws://${GW_PUBLIC_IP}:${GATEWAY_PORT}"
+        GW_VERSION=$(openclaw --version 2>/dev/null | head -1 || echo "unknown")
+
+        REGISTER_RESP=$(curl -fsSL --max-time 10 \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d "{\"registerToken\":\"${REGISTER_TOKEN}\",\"gatewayUrl\":\"${GW_URL}\",\"authToken\":\"${GW_AUTH_TOKEN}\",\"hostname\":\"${HOSTNAME}\",\"version\":\"${GW_VERSION}\"}" \
+            "${PORTAL_URL}/api/openclaw/personal/register" 2>/dev/null || echo "")
+
+        if echo "$REGISTER_RESP" | grep -q '"success":true'; then
+            echo ">> Successfully registered with Portal!"
+        else
+            echo ">> Warning: Portal registration failed: ${REGISTER_RESP}"
+        fi
+    else
+        echo ">> Warning: Cannot register - missing auth token or public IP"
+    fi
+fi
+
+# ============================================
 # 验证截图工具可用
 # ============================================
 sleep 3
