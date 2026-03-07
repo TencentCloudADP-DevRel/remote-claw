@@ -30,7 +30,9 @@ apply_firefox_autotune() {
 $AUTO_TUNE_MARKER_START
 user_pref("dom.ipc.processCount", ${ff_proc});
 user_pref("dom.ipc.processCount.webIsolated", ${ff_webiso});
+user_pref("dom.ipc.processCount.webIsolated.maxPerOrigin", 1);
 user_pref("browser.cache.memory.capacity", ${ff_cache_mem});
+user_pref("layout.frame_rate", 30);
 $AUTO_TUNE_MARKER_END
 EOF
 

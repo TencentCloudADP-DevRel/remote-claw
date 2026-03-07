@@ -106,6 +106,8 @@ pick_profile_name() {
         echo "large"
     elif [ "$cpus" -ge 8 ] && [ "$mem_gb" -ge 16 ]; then
         echo "medium"
+    elif [ "$mem_gb" -le 3 ]; then
+        echo "tiny"
     else
         echo "small"
     fi
@@ -125,19 +127,28 @@ compute_env() {
     tuned_cpus="$(clamp_int "$tuned_cpus" 2 12)"
 
     tuned_mem_gb=$(( mem_total_gb * 60 / 100 ))
-    tuned_mem_gb="$(clamp_int "$tuned_mem_gb" 4 24)"
+    tuned_mem_gb="$(clamp_int "$tuned_mem_gb" 2 24)"
 
     tuned_shm_gb=$(( tuned_mem_gb / 4 ))
     tuned_shm_gb="$(clamp_int "$tuned_shm_gb" 1 8)"
 
-    ff_proc=$(( tuned_cpus / 2 ))
-    ff_proc="$(clamp_int "$ff_proc" 2 8)"
-
-    ff_webiso=$(( ff_proc / 2 ))
-    ff_webiso="$(clamp_int "$ff_webiso" 1 4)"
-
-    ff_cache_kb=$(( tuned_mem_gb * 1024 * 1024 / 16 ))
-    ff_cache_kb="$(clamp_int "$ff_cache_kb" 65536 524288)"
+    # Firefox process tuning — 小规格机器更激进
+    if [ "$tuned_mem_gb" -le 4 ]; then
+        ff_proc=1
+        ff_webiso=1
+        ff_cache_kb=32768
+    elif [ "$tuned_mem_gb" -le 8 ]; then
+        ff_proc=2
+        ff_webiso=1
+        ff_cache_kb=65536
+    else
+        ff_proc=$(( tuned_cpus / 2 ))
+        ff_proc="$(clamp_int "$ff_proc" 2 8)"
+        ff_webiso=$(( ff_proc / 2 ))
+        ff_webiso="$(clamp_int "$ff_webiso" 1 4)"
+        ff_cache_kb=$(( tuned_mem_gb * 1024 * 1024 / 16 ))
+        ff_cache_kb="$(clamp_int "$ff_cache_kb" 65536 524288)"
+    fi
 
     vnc_resolution="$(pick_resolution "$tuned_cpus" "$tuned_mem_gb")"
     profile_name="$(pick_profile_name "$tuned_cpus" "$tuned_mem_gb")"

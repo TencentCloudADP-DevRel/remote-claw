@@ -196,28 +196,59 @@ RUN printf '<?xml version="1.0" encoding="UTF-8"?>\n\
 RUN mkdir -p /opt/openclaw/dotfiles/.mozilla/firefox/openclaw.default \
     && printf '[General]\nStartWithLastProfile=1\n\n[Profile0]\nName=default\nIsRelative=1\nPath=openclaw.default\nDefault=1\n' \
        > /opt/openclaw/dotfiles/.mozilla/firefox/profiles.ini \
-    && printf 'user_pref("dom.ipc.processCount", 4);\n\
+    && printf '// === Process & rendering (overridden by autotune) ===\n\
+user_pref("dom.ipc.processCount", 4);\n\
 user_pref("dom.ipc.processCount.webIsolated", 2);\n\
+user_pref("dom.ipc.processCount.webIsolated.maxPerOrigin", 1);\n\
+// === GPU / compositing — 无 GPU 环境全部关闭 ===\n\
 user_pref("layers.acceleration.disabled", true);\n\
 user_pref("gfx.webrender.all", false);\n\
 user_pref("gfx.webrender.enabled", false);\n\
 user_pref("gfx.canvas.accelerated", false);\n\
+user_pref("gfx.x11-egl.force-disabled", true);\n\
 user_pref("media.hardware-video-decoding.enabled", false);\n\
+user_pref("media.ffmpeg.vaapi.enabled", false);\n\
 user_pref("webgl.disabled", true);\n\
 user_pref("webgl.enable-webgl2", false);\n\
-user_pref("browser.cache.memory.capacity", 131072);\n\
-user_pref("browser.cache.disk.capacity", 512000);\n\
-user_pref("browser.sessionhistory.max_total_viewers", 2);\n\
+// === Memory / cache ===\n\
+user_pref("browser.cache.memory.capacity", 65536);\n\
+user_pref("browser.cache.disk.capacity", 256000);\n\
+user_pref("browser.cache.memory.max_entry_size", 2048);\n\
+user_pref("browser.sessionhistory.max_total_viewers", 1);\n\
+user_pref("browser.sessionstore.max_tabs_undo", 3);\n\
+user_pref("browser.sessionstore.max_windows_undo", 0);\n\
+user_pref("browser.sessionstore.interval", 60000);\n\
 user_pref("browser.tabs.unloadOnLowMemory", true);\n\
+user_pref("image.mem.decode_bytes_at_a_time", 16384);\n\
+user_pref("image.mem.surfacecache.max_size_kb", 131072);\n\
+// === Disable background services ===\n\
 user_pref("extensions.pocket.enabled", false);\n\
 user_pref("browser.safebrowsing.malware.enabled", false);\n\
 user_pref("browser.safebrowsing.phishing.enabled", false);\n\
 user_pref("datareporting.healthreport.uploadEnabled", false);\n\
 user_pref("toolkit.telemetry.enabled", false);\n\
+user_pref("toolkit.telemetry.unified", false);\n\
+user_pref("toolkit.telemetry.archive.enabled", false);\n\
 user_pref("app.update.enabled", false);\n\
 user_pref("browser.shell.checkDefaultBrowser", false);\n\
+user_pref("browser.search.suggest.enabled", false);\n\
+user_pref("browser.urlbar.suggest.searches", false);\n\
+user_pref("browser.discovery.enabled", false);\n\
+user_pref("browser.newtabpage.activity-stream.feeds.telemetry", false);\n\
+user_pref("browser.newtabpage.activity-stream.telemetry", false);\n\
+user_pref("browser.newtabpage.activity-stream.feeds.section.topstories", false);\n\
+user_pref("browser.newtabpage.activity-stream.showSponsored", false);\n\
+user_pref("browser.newtabpage.activity-stream.showSponsoredTopSites", false);\n\
+user_pref("network.prefetch-next", false);\n\
+user_pref("network.dns.disablePrefetch", true);\n\
+user_pref("network.http.speculative-parallel-limit", 0);\n\
+user_pref("browser.send_pings", false);\n\
+// === Reduce animations / rendering cost ===\n\
 user_pref("toolkit.cosmeticAnimations.enabled", false);\n\
 user_pref("ui.prefersReducedMotion", 1);\n\
+user_pref("layout.frame_rate", 30);\n\
+user_pref("nglayout.enable_drag_images", false);\n\
+// === Network ===\n\
 user_pref("network.dns.disableIPv6", true);\n\
 user_pref("security.tls.version.min", 1);\n\
 user_pref("security.tls.version.max", 4);\n' \

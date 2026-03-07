@@ -398,14 +398,24 @@ clamp() { local v="$1" lo="$2" hi="$3"; [ "$v" -lt "$lo" ] && echo "$lo" && retu
 TUNED_CPUS=$(clamp $(( HOST_CPUS - 1 )) 2 12)
 TUNED_MEM_GB=$(clamp $(( MEM_TOTAL_GB * 60 / 100 )) 2 24)
 TUNED_SHM_GB=$(clamp $(( TUNED_MEM_GB / 4 )) 1 8)
-FF_PROC=$(clamp $(( TUNED_CPUS / 2 )) 2 8)
-FF_WEBISO=$(clamp $(( FF_PROC / 2 )) 1 4)
-FF_CACHE_KB=$(clamp $(( TUNED_MEM_GB * 1024 * 1024 / 16 )) 65536 524288)
+
+# Firefox 进程调优 — 小规格机器更激进
+if [ "$TUNED_MEM_GB" -le 4 ]; then
+    FF_PROC=1; FF_WEBISO=1; FF_CACHE_KB=32768
+elif [ "$TUNED_MEM_GB" -le 8 ]; then
+    FF_PROC=2; FF_WEBISO=1; FF_CACHE_KB=65536
+else
+    FF_PROC=$(clamp $(( TUNED_CPUS / 2 )) 2 8)
+    FF_WEBISO=$(clamp $(( FF_PROC / 2 )) 1 4)
+    FF_CACHE_KB=$(clamp $(( TUNED_MEM_GB * 1024 * 1024 / 16 )) 65536 524288)
+fi
 
 if [ "$TUNED_CPUS" -ge 8 ] && [ "$TUNED_MEM_GB" -ge 16 ]; then
     VNC_RES="1920x1080"; PROFILE="large"
 elif [ "$TUNED_CPUS" -ge 4 ] && [ "$TUNED_MEM_GB" -ge 8 ]; then
     VNC_RES="1600x900"; PROFILE="medium"
+elif [ "$TUNED_MEM_GB" -le 3 ]; then
+    VNC_RES="1280x720"; PROFILE="tiny"
 else
     VNC_RES="1366x768"; PROFILE="small"
 fi
