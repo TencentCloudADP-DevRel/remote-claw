@@ -170,6 +170,7 @@ import json
 with open('/root/.openclaw/openclaw.json') as f:
     cfg = json.load(f)
 gw = cfg.setdefault('gateway', {})
+gw['mode'] = 'local'
 gw['bind'] = 'lan'
 gw.setdefault('auth', {})['mode'] = 'token'
 with open('/root/.openclaw/openclaw.json', 'w') as f:

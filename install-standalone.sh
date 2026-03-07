@@ -465,11 +465,12 @@ EOF
 cat > "${INSTALL_DIR}/openclaw-config/openclaw.json" <<CEOF
 {
   "gateway": {
+    "mode": "local",
     "bind": "lan",
     "port": ${GATEWAY_PORT},
     "auth": {
       "mode": "token",
-      "token": "\${OPENCLAW_GATEWAY_TOKEN}"
+      "token": "${GATEWAY_TOKEN}"
     }
   }
 }
