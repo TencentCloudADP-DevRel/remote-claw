@@ -74,13 +74,11 @@ chmod 600 /root/.vnc/passwd
 cat > /root/.vnc/xstartup << 'XEOF'
 #!/bin/bash
 unset SESSION_MANAGER
-unset DBUS_SESSION_BUS_ADDRESS
+export DBUS_SESSION_BUS_ADDRESS=
 export XDG_SESSION_TYPE=x11
 
 # Start dbus
-if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
-    eval $(dbus-launch --sh-syntax)
-fi
+eval $(dbus-launch --sh-syntax)
 
 # 关闭 Xfce 合成器（compositing），大幅减少渲染开销
 xfconf-query -c xfwm4 -p /general/use_compositing -s false 2>/dev/null &
@@ -130,11 +128,9 @@ sleep 1
 # 启动桌面环境（在 VNC 就绪之后）
 (
     unset SESSION_MANAGER
-    unset DBUS_SESSION_BUS_ADDRESS
+    export DBUS_SESSION_BUS_ADDRESS=
     export XDG_SESSION_TYPE=x11
-    if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
-        eval $(dbus-launch --sh-syntax)
-    fi
+    eval $(dbus-launch --sh-syntax)
     xfconf-query -c xfwm4 -p /general/use_compositing -s false 2>/dev/null &
     exec startxfce4
 ) &

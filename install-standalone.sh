@@ -71,7 +71,6 @@ MINIMAX_API_KEY=""
 MOONSHOT_API_KEY=""
 QIANFAN_API_KEY=""
 OLLAMA_URL=""
-CUSTOM_PROVIDERS=""
 
 # ---- 解析参数 ----
 for arg in "$@"; do
