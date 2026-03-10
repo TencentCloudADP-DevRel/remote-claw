@@ -165,20 +165,32 @@ done
 # ============================================
 # 启动 OpenClaw Gateway（后台运行，带重试健康检查）
 # ============================================
-# 确保 Gateway 监听所有网卡（允许外部 Portal 连接）
-if [ -f /root/.openclaw/openclaw.json ]; then
-    python3 -c "
-import json
-with open('/root/.openclaw/openclaw.json') as f:
-    cfg = json.load(f)
+# 确保 openclaw.json 存在并配置 Gateway 监听所有网卡
+mkdir -p /root/.openclaw
+python3 -c "
+import json, os, secrets
+
+config_path = '/root/.openclaw/openclaw.json'
+
+# 读取已有配置或创建新配置
+if os.path.exists(config_path):
+    with open(config_path) as f:
+        cfg = json.load(f)
+else:
+    cfg = {}
+
 gw = cfg.setdefault('gateway', {})
 gw['mode'] = 'local'
 gw['bind'] = 'lan'
-gw.setdefault('auth', {})['mode'] = 'token'
-with open('/root/.openclaw/openclaw.json', 'w') as f:
+auth = gw.setdefault('auth', {})
+auth['mode'] = 'token'
+# 如果没有 token，自动生成一个
+if not auth.get('token'):
+    auth['token'] = secrets.token_hex(24)
+
+with open(config_path, 'w') as f:
     json.dump(cfg, f, indent=2)
 " 2>/dev/null || true
-fi
 echo ">> Starting OpenClaw Gateway on port ${GATEWAY_PORT}..."
 nohup openclaw gateway --port "${GATEWAY_PORT}" > /tmp/gateway.log 2>&1 &
 
