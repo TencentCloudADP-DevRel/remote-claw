@@ -195,7 +195,7 @@ echo ">> Starting OpenClaw Gateway on port ${GATEWAY_PORT}..."
 nohup openclaw gateway --port "${GATEWAY_PORT}" > /tmp/gateway.log 2>&1 &
 
 GATEWAY_READY=0
-for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+for i in $(seq 1 60); do
     if netstat -tln 2>/dev/null | grep -q ":${GATEWAY_PORT} "; then
         GATEWAY_READY=1
         echo ">> OpenClaw Gateway started successfully (${i}s)"
@@ -204,7 +204,7 @@ for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
     sleep 1
 done
 if [ "$GATEWAY_READY" -eq 0 ]; then
-    echo ">> Warning: Gateway not responding after 20s, check /tmp/gateway.log"
+    echo ">> Warning: Gateway not responding after 60s, check /tmp/gateway.log"
 fi
 
 # ============================================
