@@ -225,8 +225,8 @@ print(cfg.get('gateway', {}).get('auth', {}).get('token', ''))
         REGISTER_RESP=$(curl -fsSL --max-time 10 \
             -X POST \
             -H "Content-Type: application/json" \
-            -d "{\"registerToken\":\"${REGISTER_TOKEN}\",\"gatewayUrl\":\"${GW_URL}\",\"authToken\":\"${GW_AUTH_TOKEN}\",\"hostname\":\"${HOSTNAME}\",\"version\":\"${GW_VERSION}\"}" \
-            "${PORTAL_URL}/api/openclaw/personal/register" 2>/dev/null || echo "")
+            -d "{\"registerToken\":\"${REGISTER_TOKEN}\",\"gatewayUrl\":\"${GW_URL}\",\"authToken\":\"${GW_AUTH_TOKEN}\"}" \
+            "${PORTAL_URL}/api/openclaw/personal/connect" 2>/dev/null || echo "")
 
         if echo "$REGISTER_RESP" | grep -q '"success":true'; then
             echo ">> Successfully registered with Portal!"
