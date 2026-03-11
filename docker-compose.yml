@@ -7,9 +7,9 @@ services:
     init: true
     restart: unless-stopped
     ports:
-      - "${OPENCLAW_VNC_PORT:-5901}:5901"         # VNC — macOS: vnc://IP:5901
-      - "${OPENCLAW_NOVNC_PORT:-6080}:6080"       # noVNC — 浏览器: http://IP:6080
-      - "${OPENCLAW_GATEWAY_PORT:-18789}:${OPENCLAW_GATEWAY_PORT:-18789}"   # OpenClaw Gateway — Portal 连接: ws://IP:PORT
+      - "${OPENCLAW_VNC_PORT:-5901}:5901"         # VNC
+      - "${OPENCLAW_NOVNC_PORT:-6080}:6080"       # noVNC (浏览器)
+      - "${OPENCLAW_GATEWAY_PORT:-18789}:${OPENCLAW_GATEWAY_PORT:-18789}"   # Gateway (ws://)
     environment:
       # ---- 桌面/VNC ----
       - VNC_PW=${OPENCLAW_VNC_PASSWORD:-openclaw}
@@ -19,30 +19,28 @@ services:
       - FIREFOX_PROCESS_COUNT=${OPENCLAW_FIREFOX_PROCESS_COUNT:-4}
       - FIREFOX_WEB_ISOLATED_COUNT=${OPENCLAW_FIREFOX_WEB_ISOLATED_COUNT:-2}
       - FIREFOX_CACHE_MEMORY_KB=${OPENCLAW_FIREFOX_CACHE_MEMORY_KB:-131072}
-      # ---- Portal 注册（Portal 模式使用） ----
+      # ---- Portal（Portal 模式使用） ----
       - PORTAL_URL=${PORTAL_URL:-}
       - REGISTER_TOKEN=${REGISTER_TOKEN:-}
       - PUBLIC_IP=${PUBLIC_IP:-}
-      # ---- AI 模型 API Keys（独立模式使用） ----
+      # ---- Gateway + AI 模型 ----
       - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
-      - MINIMAX_API_KEY=${MINIMAX_API_KEY:-}
-      - MOONSHOT_API_KEY=${MOONSHOT_API_KEY:-}
-      - QIANFAN_API_KEY=${QIANFAN_API_KEY:-}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-}
     extra_hosts:
-      - "host.docker.internal:host-gateway"   # 允许容器访问宿主机 Ollama
+      - "host.docker.internal:host-gateway"
     security_opt:
-      - seccomp=unconfined      # 允许 Firefox 沙箱创建用户命名空间
+      - seccomp=unconfined
     cap_add:
-      - SYS_ADMIN               # Firefox content sandbox 需要 clone(CLONE_NEWUSER)
+      - SYS_ADMIN
     volumes:
       - desktop-home:/root
-      - ./shared:/shared                              # 宿主机共享目录
-      - screenshots:/screenshots                      # 截图输出目录
+      - ./shared:/shared
+      - screenshots:/screenshots
+      - ./openclaw-config:/root/.openclaw
     shm_size: "${OPENCLAW_SHM_SIZE:-2g}"
     mem_limit: "${OPENCLAW_MEM_LIMIT:-8g}"
     cpus: ${OPENCLAW_CPUS:-4}

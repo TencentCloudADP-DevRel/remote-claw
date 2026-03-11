@@ -3,13 +3,16 @@ set -euo pipefail
 
 HOSTNAME=$(hostname)
 GATEWAY_PORT="${GATEWAY_PORT:-18789}"
+OPENCLAW_CONFIG="/root/.openclaw/openclaw.json"
 AUTO_TUNE_MARKER_START='// OPENCLAW_AUTO_TUNE_START'
 AUTO_TUNE_MARKER_END='// OPENCLAW_AUTO_TUNE_END'
 
+# ============================================
+# Firefox 自动调优
+# ============================================
 apply_firefox_autotune() {
     local profile_dir="$1"
     local user_js="${profile_dir}/user.js"
-    local tmp_file
     local ff_proc ff_webiso ff_cache_mem
 
     ff_proc="${FIREFOX_PROCESS_COUNT:-4}"
@@ -18,6 +21,7 @@ apply_firefox_autotune() {
 
     [ -d "$profile_dir" ] || return 0
     touch "$user_js"
+    local tmp_file
     tmp_file="$(mktemp)"
 
     awk -v start="$AUTO_TUNE_MARKER_START" -v end="$AUTO_TUNE_MARKER_END" '
@@ -45,17 +49,14 @@ EOF
 mkdir -p /root/.config/xfce4/xfconf/xfce-perchannel-xml
 mkdir -p /root/.config/gtk-3.0
 
-# 恢复桌面主题（不覆盖用户修改）
 if [ ! -f /root/.config/gtk-3.0/settings.ini ]; then
     cp -r /opt/openclaw/dotfiles/. /root/
 fi
 
-# 恢复 Firefox 配置（同步到所有 profile 目录）
 mkdir -p /root/.mozilla/firefox/openclaw.default
 cp -r /opt/openclaw/dotfiles/.mozilla/. /root/.mozilla/ 2>/dev/null || true
 apply_firefox_autotune "/root/.mozilla/firefox/openclaw.default"
 
-# 将 user.js 同步到 Firefox 自动创建的 default-release profile
 for profile_dir in /root/.mozilla/firefox/*.default-release; do
     if [ -d "$profile_dir" ]; then
         cp /opt/openclaw/dotfiles/.mozilla/firefox/openclaw.default/user.js "$profile_dir/user.js" 2>/dev/null || true
@@ -64,43 +65,29 @@ for profile_dir in /root/.mozilla/firefox/*.default-release; do
 done
 
 # ============================================
-# VNC 密码设置
+# VNC 密码 + xstartup
 # ============================================
 mkdir -p /root/.vnc
 echo "$VNC_PW" | vncpasswd -f > /root/.vnc/passwd
 chmod 600 /root/.vnc/passwd
 
-# ============================================
-# VNC xstartup（含桌面性能优化）
-# ============================================
 cat > /root/.vnc/xstartup << 'XEOF'
 #!/bin/bash
 unset SESSION_MANAGER
 export DBUS_SESSION_BUS_ADDRESS=
 export XDG_SESSION_TYPE=x11
-
-# Start dbus
 eval $(dbus-launch --sh-syntax)
-
-# 关闭 Xfce 合成器（compositing），大幅减少渲染开销
 xfconf-query -c xfwm4 -p /general/use_compositing -s false 2>/dev/null &
-
-# Start Xfce
 exec startxfce4
 XEOF
 chmod +x /root/.vnc/xstartup
 
 # ============================================
-# 清理可能存在的锁文件
+# 启动 VNC
 # ============================================
 rm -f /tmp/.X1-lock /tmp/.X11-unix/X1
 
-# ============================================
-# 启动 TigerVNC（直接启动 Xtigervnc，避免 perl wrapper 阻塞）
-# ============================================
 echo ">> Starting VNC server on :1 (${VNC_RESOLUTION}x${VNC_COL_DEPTH})"
-
-# 直接启动 Xtigervnc 进程（后台）
 /usr/bin/Xtigervnc :1 \
     -geometry "$VNC_RESOLUTION" \
     -depth "$VNC_COL_DEPTH" \
@@ -117,7 +104,6 @@ echo ">> Starting VNC server on :1 (${VNC_RESOLUTION}x${VNC_COL_DEPTH})"
     -desktop "openclaw:1 (root)" &
 XVNC_PID=$!
 
-# 等待 VNC 端口就绪
 for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
     if [ -e /proc/$XVNC_PID ] && netstat -tln 2>/dev/null | grep -q ":${VNC_PORT} "; then
         echo ">> VNC server ready (${i}s)"
@@ -127,7 +113,7 @@ for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
 done
 sleep 1
 
-# 启动桌面环境（在 VNC 就绪之后）
+# 启动桌面
 (
     unset SESSION_MANAGER
     export DBUS_SESSION_BUS_ADDRESS=
@@ -138,14 +124,12 @@ sleep 1
 ) &
 sleep 2
 
-# ============================================
-# 启动 autocutsel（桥接 X11 剪贴板 ↔ VNC 剪贴板）
-# ============================================
+# 剪贴板桥接
 autocutsel -s PRIMARY -fork 2>/dev/null || true
 autocutsel -s CLIPBOARD -fork 2>/dev/null || true
 
 # ============================================
-# 启动 noVNC（Web 访问，带压缩优化）
+# 启动 noVNC
 # ============================================
 echo ">> Starting noVNC on port ${NOVNC_PORT}"
 /opt/noVNC/utils/novnc_proxy \
@@ -153,7 +137,6 @@ echo ">> Starting noVNC on port ${NOVNC_PORT}"
     --listen ${NOVNC_PORT} \
     --web /opt/noVNC &
 
-# 等待 noVNC 端口就绪
 for i in 1 2 3 4 5 6 7 8 9 10; do
     if netstat -tln 2>/dev/null | grep -q ":${NOVNC_PORT} "; then
         echo ">> noVNC ready (${i}s)"
@@ -163,18 +146,28 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
 done
 
 # ============================================
-# 启动 OpenClaw Gateway（后台运行，带重试健康检查）
+# 确保 openclaw.json 配置正确
 # ============================================
-# 确保 openclaw.json 存在并配置 Gateway 监听所有网卡
-mkdir -p /root/.openclaw
-python3 -c "
+ensure_gateway_config() {
+    local token="${OPENCLAW_GATEWAY_TOKEN:-}"
+    local config_dir
+    config_dir="$(dirname "$OPENCLAW_CONFIG")"
+    mkdir -p "$config_dir"
+
+    # 通过环境变量传递敏感数据，避免 shell 引号注入
+    OPENCLAW_CFG_PATH="$OPENCLAW_CONFIG" \
+    OPENCLAW_CFG_TOKEN="$token" \
+    OPENCLAW_CFG_PORT="$GATEWAY_PORT" \
+    python3 -c "
 import json, os, secrets
 
-config_path = '/root/.openclaw/openclaw.json'
+cfg_path = os.environ['OPENCLAW_CFG_PATH']
+token = os.environ.get('OPENCLAW_CFG_TOKEN', '')
+port = int(os.environ.get('OPENCLAW_CFG_PORT', '18789'))
 
 # 读取已有配置或创建新配置
-if os.path.exists(config_path):
-    with open(config_path) as f:
+if os.path.exists(cfg_path):
+    with open(cfg_path) as f:
         cfg = json.load(f)
 else:
     cfg = {}
@@ -182,15 +175,28 @@ else:
 gw = cfg.setdefault('gateway', {})
 gw['mode'] = 'local'
 gw['bind'] = 'lan'
+gw['port'] = port
+
 auth = gw.setdefault('auth', {})
 auth['mode'] = 'token'
-# 如果没有 token，自动生成一个
-if not auth.get('token'):
+# 优先使用环境变量 token；否则保留已有 token；都没有则自动生成
+if token:
+    auth['token'] = token
+elif not auth.get('token'):
     auth['token'] = secrets.token_hex(24)
 
-with open(config_path, 'w') as f:
+cfg.setdefault('tools', {})['profile'] = 'full'
+
+with open(cfg_path, 'w') as f:
     json.dump(cfg, f, indent=2)
 " 2>/dev/null || true
+}
+
+ensure_gateway_config
+
+# ============================================
+# 启动 OpenClaw Gateway
+# ============================================
 echo ">> Starting OpenClaw Gateway on port ${GATEWAY_PORT}..."
 nohup openclaw gateway --port "${GATEWAY_PORT}" > /tmp/gateway.log 2>&1 &
 
@@ -208,26 +214,24 @@ if [ "$GATEWAY_READY" -eq 0 ]; then
 fi
 
 # ============================================
-# 自动注册到 Portal（如果提供了 REGISTER_TOKEN）
+# Portal 自动注册（如提供了 REGISTER_TOKEN）
 # ============================================
 if [ -n "${REGISTER_TOKEN:-}" ] && [ -n "${PORTAL_URL:-}" ]; then
     echo ">> Auto-registering with Portal: ${PORTAL_URL}"
 
-    # 读取 Gateway auth token
     GW_AUTH_TOKEN=""
-    if [ -f /root/.openclaw/openclaw.json ]; then
+    if [ -f "$OPENCLAW_CONFIG" ]; then
         GW_AUTH_TOKEN=$(python3 -c "
 import json
-with open('/root/.openclaw/openclaw.json') as f:
+with open('$OPENCLAW_CONFIG') as f:
     cfg = json.load(f)
 print(cfg.get('gateway', {}).get('auth', {}).get('token', ''))
 " 2>/dev/null || echo "")
     fi
 
-    # 确定公网 IP
     GW_PUBLIC_IP="${PUBLIC_IP:-}"
     if [ -z "$GW_PUBLIC_IP" ]; then
-        GW_PUBLIC_IP=$(curl -fsSL --max-time 5 https://ifconfig.me 2>/dev/null || curl -fsSL --max-time 5 https://api.ipify.org 2>/dev/null || echo "")
+        GW_PUBLIC_IP=$(curl -fsSL --max-time 5 https://ifconfig.me 2>/dev/null || echo "")
     fi
 
     if [ -n "$GW_AUTH_TOKEN" ] && [ -n "$GW_PUBLIC_IP" ]; then
@@ -245,13 +249,11 @@ print(cfg.get('gateway', {}).get('auth', {}).get('token', ''))
         else
             echo ">> Warning: Portal registration failed: ${REGISTER_RESP}"
         fi
-    else
-        echo ">> Warning: Cannot register - missing auth token or public IP"
     fi
 fi
 
 # ============================================
-# 验证截图工具可用
+# 截图测试
 # ============================================
 sleep 3
 echo ">> Testing screenshot capability..."
@@ -273,22 +275,14 @@ cat << INFO
   VNC:      vnc://HOST:${VNC_PORT}
             password: ${VNC_PW}
 
-  Web (推荐用这个 URL，已含性能优化参数):
-    http://HOST:${NOVNC_PORT}/vnc.html?autoconnect=true&resize=scale&quality=6&compression=2&show_dot=true
+  Web:
+    http://HOST:${NOVNC_PORT}/vnc.html?autoconnect=true&resize=scale&quality=6&compression=2
 
-  Screenshot:
-    Full:   /opt/openclaw/screenshot.sh
-    Base64: /opt/openclaw/screenshot.sh --base64
-    Custom: /opt/openclaw/screenshot.sh /path/to/output.png
-
-  Automation:
-    xdotool - keyboard/mouse control
-    xclip   - clipboard access
+  Gateway:  ws://HOST:${GATEWAY_PORT}
 
 ========================================
 
 INFO
 
-# 保持前台运行（等待 Xtigervnc 进程，如果它退出则容器退出）
 echo ">> All services started. Waiting for Xtigervnc (PID $XVNC_PID)..."
 wait $XVNC_PID 2>/dev/null || sleep infinity
