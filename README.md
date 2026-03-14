@@ -12,15 +12,42 @@
 
 ## 快速开始
 
-1. 进入项目目录：
+### 方式一: 远程一键安装 (推荐) 🚀
+
+在全新服务器上直接运行,无需预先安装 Docker 或 Git:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/TencentCloudADP-DevRel/remote-claw/main/install-standalone.sh | sudo bash
+```
+
+**特点:**
+- ✅ 自动安装 Docker
+- ✅ 自动拉取镜像 `tencentcloudadpdevrel/openclaw-desktop:latest`
+- ✅ 自动资源调优
+- ✅ 交互式配置 API Key
+- ✅ 启动完整桌面环境 (VNC + Gateway)
+
+**非交互式安装:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/TencentCloudADP-DevRel/remote-claw/main/install-standalone.sh | sudo bash -s -- \
+  --anthropic-key=sk-ant-xxx \
+  --openai-key=sk-xxx \
+  --non-interactive
+```
+
+**仅安装 Gateway (无桌面):**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/TencentCloudADP-DevRel/remote-claw/main/install-standalone.sh | sudo bash -s -- --mode=simple
+```
+
+### 方式二: 本地部署
+
+如果已经 clone 了项目:
 
 ```bash
 cd /root/remote-claw
-```
-
-2. 以 root 执行一键部署脚本：
-
-```bash
 sudo ./autotune-deploy.sh
 ```
 
