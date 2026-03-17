@@ -25,6 +25,7 @@
 #   --openrouter-key=KEY    OpenRouter API Key
 #   --ollama-url=URL        Ollama 地址
 #   --gateway-token=TOKEN   Gateway 访问令牌（默认自动生成）
+#   --image=REF             OpenClaw 镜像（默认 latest）
 #   --gateway-port=N        Gateway 端口（默认 18789）
 #   --public-ip=IP          公网 IP（自动探测）
 #   --vnc-password=PW       VNC 密码（默认 openclaw，仅 gui 模式）
@@ -32,6 +33,8 @@
 #   --non-interactive       非交互模式
 # ============================================================
 set -euo pipefail
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 # ---- 颜色 ----
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
@@ -89,6 +92,7 @@ for arg in "$@"; do
         --openrouter-key=*) OPENROUTER_API_KEY="${arg#*=}" ;;
         --ollama-url=*)     OLLAMA_URL="${arg#*=}" ;;
         --gateway-token=*)  GATEWAY_TOKEN="${arg#*=}" ;;
+        --image=*)          IMAGE_GUI="${arg#*=}"; IMAGE_SIMPLE="${arg#*=}" ;;
         --public-ip=*)      PUBLIC_IP="${arg#*=}" ;;
         --gateway-port=*)   GATEWAY_PORT="${arg#*=}" ;;
         --vnc-password=*)   VNC_PASSWORD="${arg#*=}" ;;
@@ -111,6 +115,7 @@ for arg in "$@"; do
             echo ""
             echo "系统配置:"
             echo "  --gateway-token=TOKEN  Gateway 访问令牌（默认自动生成）"
+            echo "  --image=REF            OpenClaw 镜像（默认 latest）"
             echo "  --gateway-port=N       Gateway 端口（默认 18789）"
             echo "  --vnc-password=PW      VNC 密码（默认 openclaw，仅 gui 模式）"
             echo "  --public-ip=IP         公网 IP（自动探测）"
@@ -589,6 +594,13 @@ fi
 # ---- 启动 ----
 info "启动 OpenClaw..."
 docker compose -f "${INSTALL_DIR}/docker-compose.yml" --env-file "${INSTALL_DIR}/.env" up -d 2>&1
+
+if [ -f "${SCRIPT_DIR}/startup.sh" ]; then
+    info "同步 startup.sh 到容器..."
+    docker cp "${SCRIPT_DIR}/startup.sh" "${CONTAINER_NAME}:/opt/startup.sh"
+    docker exec "${CONTAINER_NAME}" chmod +x /opt/startup.sh
+    docker restart "${CONTAINER_NAME}" >/dev/null
+fi
 
 # ---- 等待就绪 ----
 info "等待服务就绪..."

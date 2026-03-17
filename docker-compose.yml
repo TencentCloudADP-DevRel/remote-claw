@@ -1,7 +1,6 @@
 services:
   desktop:
-    image: tencentcloudadpdevrel/openclaw-desktop:latest
-    build: .
+    image: ${OPENCLAW_IMAGE:-tencentcloudadpdevrel/openclaw-desktop:latest}
     container_name: ${OPENCLAW_CONTAINER_NAME:-openclaw-desktop}
     hostname: openclaw
     init: true
@@ -23,6 +22,7 @@ services:
       - PORTAL_URL=${PORTAL_URL:-}
       - REGISTER_TOKEN=${REGISTER_TOKEN:-}
       - PUBLIC_IP=${PUBLIC_IP:-}
+      - PUBLIC_GATEWAY_URL=${PUBLIC_GATEWAY_URL:-}
       # ---- Gateway + AI 模型 ----
       - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}

@@ -8,7 +8,7 @@
 - 自动安装 Docker 与 Docker Compose（缺失时）
 - 自动按资源调优容器参数（`cpus` / `mem_limit` / `shm_size`）
 - 自动调优 Firefox 多进程与缓存参数
-- 一键构建并启动（首次安装）或滚动更新（已有容器）
+- 一键拉取指定镜像并启动（首次安装）或滚动更新（已有容器）
 
 ## 快速开始
 
@@ -31,6 +31,7 @@ curl -fsSL https://raw.githubusercontent.com/TencentCloudADP-DevRel/remote-claw/
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/TencentCloudADP-DevRel/remote-claw/main/install-standalone.sh | sudo bash -s -- \
+  --image=tencentcloudadpdevrel/openclaw-desktop:latest \
   --anthropic-key=sk-ant-xxx \
   --openai-key=sk-xxx \
   --non-interactive
@@ -61,7 +62,7 @@ sudo ./setup.sh
 
 - 检测系统资源并写入 `.env`
 - 检查并安装 Docker/Compose
-- 执行 `docker compose up -d --build`
+- 执行 `docker compose up -d`
 
 ## 访问入口
 
@@ -71,9 +72,21 @@ sudo ./setup.sh
 
 默认端口可在 `.env` 中通过以下变量调整：
 
+- `OPENCLAW_IMAGE`
 - `OPENCLAW_VNC_PORT`
 - `OPENCLAW_NOVNC_PORT`
 - `OPENCLAW_GATEWAY_PORT`
+
+Portal 一键部署模式还会使用：
+
+- `PORTAL_URL`
+- `REGISTER_TOKEN`
+- `PUBLIC_IP`
+- `PUBLIC_GATEWAY_URL`
+
+其中 `PUBLIC_GATEWAY_URL` 可显式指定 Portal 应回连的地址；未提供时，启动脚本会自动组合公网 IP 和本机网卡地址候选列表，并在首次注册时自动尝试配对批准。
+
+如果需要锁定 Docker 版本，可在安装命令中传入 `--image=<registry>/<image>:<tag>`。
 
 ## 常用运维命令
 

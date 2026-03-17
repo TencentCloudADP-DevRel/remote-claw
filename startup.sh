@@ -4,6 +4,7 @@ set -euo pipefail
 HOSTNAME=$(hostname)
 GATEWAY_PORT="${GATEWAY_PORT:-18789}"
 OPENCLAW_CONFIG="/root/.openclaw/openclaw.json"
+REGISTRATION_STATE_FILE="/root/.openclaw/portal-registration.json"
 AUTO_TUNE_MARKER_START='// OPENCLAW_AUTO_TUNE_START'
 AUTO_TUNE_MARKER_END='// OPENCLAW_AUTO_TUNE_END'
 
@@ -194,6 +195,78 @@ with open(cfg_path, 'w') as f:
 
 ensure_gateway_config
 
+append_gateway_candidate() {
+    local candidate="$1"
+    [ -n "$candidate" ] || return 0
+
+    case "${candidate}" in
+        ws://*|wss://*|http://*|https://*) ;;
+        *) candidate="ws://${candidate}" ;;
+    esac
+
+    case "
+${GATEWAY_CANDIDATES}
+" in
+        *"
+${candidate}
+"*) return 0 ;;
+    esac
+
+    if [ -z "${GATEWAY_CANDIDATES}" ]; then
+        GATEWAY_CANDIDATES="${candidate}"
+    else
+        GATEWAY_CANDIDATES="${GATEWAY_CANDIDATES}
+${candidate}"
+    fi
+}
+
+collect_gateway_candidates() {
+    GATEWAY_CANDIDATES=""
+
+    if [ -n "${PUBLIC_GATEWAY_URL:-}" ]; then
+        append_gateway_candidate "${PUBLIC_GATEWAY_URL}"
+    fi
+
+    if [ -n "${PUBLIC_IP:-}" ]; then
+        append_gateway_candidate "ws://${PUBLIC_IP}:${GATEWAY_PORT}"
+    fi
+
+    while IFS= read -r ip; do
+        [ -n "$ip" ] || continue
+        append_gateway_candidate "ws://${ip}:${GATEWAY_PORT}"
+    done < <(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^$' | grep -v '^127\.' | grep -v '^172\.17\.' || true)
+}
+
+write_registration_state() {
+    local gateway_url="$1"
+    REG_STATE_PATH="${REGISTRATION_STATE_FILE}" \
+    REG_PORTAL_URL="${PORTAL_URL}" \
+    REG_GATEWAY_URL="${gateway_url}" \
+    REG_HOSTNAME="${HOSTNAME}" \
+    python3 -c "
+import json, os, time
+
+path = os.environ['REG_STATE_PATH']
+payload = {
+    'portalUrl': os.environ.get('REG_PORTAL_URL', ''),
+    'gatewayUrl': os.environ.get('REG_GATEWAY_URL', ''),
+    'hostname': os.environ.get('REG_HOSTNAME', ''),
+    'registeredAt': int(time.time()),
+}
+with open(path, 'w') as f:
+    json.dump(payload, f, indent=2)
+"
+}
+
+register_with_portal() {
+    local payload="$1"
+    curl -sS --max-time 15 -w "\n%{http_code}" \
+        -X POST \
+        -H "Content-Type: application/json" \
+        -d "${payload}" \
+        "${PORTAL_URL}/api/openclaw/personal/connect" 2>/dev/null || echo ""
+}
+
 # ============================================
 # 启动 OpenClaw Gateway
 # ============================================
@@ -217,37 +290,82 @@ fi
 # Portal 自动注册（如提供了 REGISTER_TOKEN）
 # ============================================
 if [ -n "${REGISTER_TOKEN:-}" ] && [ -n "${PORTAL_URL:-}" ]; then
-    echo ">> Auto-registering with Portal: ${PORTAL_URL}"
+    if [ -f "${REGISTRATION_STATE_FILE}" ] && [ "${FORCE_PORTAL_REGISTRATION:-0}" != "1" ]; then
+        echo ">> Portal registration already completed, skipping"
+    else
+        echo ">> Auto-registering with Portal: ${PORTAL_URL}"
 
-    GW_AUTH_TOKEN=""
-    if [ -f "$OPENCLAW_CONFIG" ]; then
-        GW_AUTH_TOKEN=$(python3 -c "
+        GW_AUTH_TOKEN=""
+        if [ -f "$OPENCLAW_CONFIG" ]; then
+            GW_AUTH_TOKEN=$(python3 -c "
 import json
 with open('$OPENCLAW_CONFIG') as f:
     cfg = json.load(f)
 print(cfg.get('gateway', {}).get('auth', {}).get('token', ''))
 " 2>/dev/null || echo "")
-    fi
+        fi
 
-    GW_PUBLIC_IP="${PUBLIC_IP:-}"
-    if [ -z "$GW_PUBLIC_IP" ]; then
-        GW_PUBLIC_IP=$(curl -fsSL --max-time 5 https://ifconfig.me 2>/dev/null || echo "")
-    fi
+        GW_PUBLIC_IP="${PUBLIC_IP:-}"
+        if [ -z "$GW_PUBLIC_IP" ] && [ -z "${PUBLIC_GATEWAY_URL:-}" ]; then
+            GW_PUBLIC_IP=$(curl -fsSL --max-time 5 https://ifconfig.me 2>/dev/null || echo "")
+        fi
 
-    if [ -n "$GW_AUTH_TOKEN" ] && [ -n "$GW_PUBLIC_IP" ]; then
-        GW_URL="ws://${GW_PUBLIC_IP}:${GATEWAY_PORT}"
-        GW_VERSION=$(openclaw --version 2>/dev/null | head -1 || echo "unknown")
+        collect_gateway_candidates
+        PRIMARY_GATEWAY_URL="$(printf '%s\n' "${GATEWAY_CANDIDATES}" | head -n 1 | tr -d '\r')"
 
-        REGISTER_RESP=$(curl -fsSL --max-time 10 \
-            -X POST \
-            -H "Content-Type: application/json" \
-            -d "{\"registerToken\":\"${REGISTER_TOKEN}\",\"gatewayUrl\":\"${GW_URL}\",\"authToken\":\"${GW_AUTH_TOKEN}\"}" \
-            "${PORTAL_URL}/api/openclaw/personal/connect" 2>/dev/null || echo "")
+        if [ -n "$GW_AUTH_TOKEN" ] && [ -n "$PRIMARY_GATEWAY_URL" ]; then
+            REGISTER_PAYLOAD=$(GW_PRIMARY_URL="${PRIMARY_GATEWAY_URL}" \
+                GW_CANDIDATES="${GATEWAY_CANDIDATES}" \
+                GW_AUTH_TOKEN="${GW_AUTH_TOKEN}" \
+                GW_REGISTER_TOKEN="${REGISTER_TOKEN}" \
+                GW_HOSTNAME="${HOSTNAME}" \
+                python3 -c "
+import json, os
 
-        if echo "$REGISTER_RESP" | grep -q '"success":true'; then
-            echo ">> Successfully registered with Portal!"
+candidates = [item for item in os.environ.get('GW_CANDIDATES', '').splitlines() if item]
+payload = {
+    'registerToken': os.environ['GW_REGISTER_TOKEN'],
+    'gatewayUrl': os.environ['GW_PRIMARY_URL'],
+    'gatewayUrlCandidates': candidates,
+    'authToken': os.environ['GW_AUTH_TOKEN'],
+    'name': os.environ.get('GW_HOSTNAME', 'openclaw'),
+}
+print(json.dumps(payload))
+")
+
+            REGISTER_RESULT="$(register_with_portal "${REGISTER_PAYLOAD}")"
+            REGISTER_HTTP_CODE="$(printf '%s\n' "${REGISTER_RESULT}" | tail -n 1)"
+            REGISTER_BODY="$(printf '%s\n' "${REGISTER_RESULT}" | sed '$d')"
+
+            if [ "${REGISTER_HTTP_CODE}" = "200" ] && printf '%s' "${REGISTER_BODY}" | grep -q '"success":true'; then
+                echo ">> Successfully registered with Portal!"
+                write_registration_state "${PRIMARY_GATEWAY_URL}"
+            elif [ "${REGISTER_HTTP_CODE}" = "409" ] && printf '%s' "${REGISTER_BODY}" | grep -q '"pairingRequired":true'; then
+                REQUEST_ID="$(printf '%s' "${REGISTER_BODY}" | python3 -c "import json,sys; print((json.load(sys.stdin).get('requestId') or '').strip())" 2>/dev/null || true)"
+                if [ -n "${REQUEST_ID}" ]; then
+                    echo ">> Pairing approval required, approving locally..."
+                    APPROVE_RESULT="$(openclaw devices approve "${REQUEST_ID}" --json 2>/dev/null || true)"
+                    if printf '%s' "${APPROVE_RESULT}" | grep -q '"requestId"'; then
+                        RETRY_RESULT="$(register_with_portal "${REGISTER_PAYLOAD}")"
+                        RETRY_HTTP_CODE="$(printf '%s\n' "${RETRY_RESULT}" | tail -n 1)"
+                        RETRY_BODY="$(printf '%s\n' "${RETRY_RESULT}" | sed '$d')"
+                        if [ "${RETRY_HTTP_CODE}" = "200" ] && printf '%s' "${RETRY_BODY}" | grep -q '"success":true'; then
+                            echo ">> Successfully registered with Portal after approval!"
+                            write_registration_state "${PRIMARY_GATEWAY_URL}"
+                        else
+                            echo ">> Warning: Portal registration retry failed: ${RETRY_BODY}"
+                        fi
+                    else
+                        echo ">> Warning: local pairing approval failed"
+                    fi
+                else
+                    echo ">> Warning: pairing required but requestId missing"
+                fi
+            else
+                echo ">> Warning: Portal registration failed: ${REGISTER_BODY}"
+            fi
         else
-            echo ">> Warning: Portal registration failed: ${REGISTER_RESP}"
+            echo ">> Warning: missing auth token or gateway URL candidates, skipping Portal registration"
         fi
     fi
 fi
